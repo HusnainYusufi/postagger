@@ -15,6 +15,9 @@ import PyPDF2
 from termcolor import colored, cprint
 from nltk.tag import tnt
 from urdu_pos_tags import urdu_pos_tags
+import tkinter.scrolledtext as tkscrolled
+from nltk.tag import pos_tag
+
 
 master = tk.Tk()
 screen_width = master.winfo_screenwidth()
@@ -237,17 +240,26 @@ class GUI(tk.Frame):
             self.text_widget.tag_configure("highlight", foreground="red")
             
     def tag_paragraph_and_count(self, paragraph):
-        words = word_tokenize(paragraph.lower())
+        words = paragraph.split()
         tagged_words = []
         tagged_word_count = 0
 
         for word in words:
-            # Look for matches in the imported dictionary
+            # Check if the word exists in the urdu_pos_tags dictionary with case sensitivity
             if word in urdu_pos_tags:
-                tagged_words.append((word, urdu_pos_tags[word]))
+                tag = urdu_pos_tags[word]
+                tagged_words.append((word, tag))
+                tagged_word_count += 1
+            # Check if the lowercase version of the word exists in the urdu_pos_tags dictionary
+            elif word.lower() in urdu_pos_tags:
+                tag = urdu_pos_tags[word.lower()]
+                tagged_words.append((word, tag))
                 tagged_word_count += 1
 
         return tagged_words, tagged_word_count
+
+
+
 
 
     #UI components.....
@@ -326,15 +338,20 @@ class GUI(tk.Frame):
         self.scrollbar.grid(row=0, column=1, sticky="ns")
         self.text_widget.config(yscrollcommand=self.scrollbar.set)
         
-    # Input Box
-        self.input_box_label = Label(self.main_frame, text="Enter Your Text:", bg="#90ee91", fg="#000000",
-                                     font=('Helvetica', 9, 'bold'))
-        self.input_box_label.pack(anchor=NE)
-        self.input_box = Entry(self.main_frame, width=30)
-        self.input_box.pack(anchor=SW, fill='x')
+    # # Input Box
+    #     self.input_box_label = Label(self.main_frame, text="Enter Your Text:", bg="#90ee91", fg="#000000",
+    #                                  font=('Helvetica', 9, 'bold'))
+    #     self.input_box_label.pack(anchor=NE)
+    #     self.input_box = Entry(self.main_frame, width=30)
+    #     self.input_box.pack(anchor=SW, fill='x')
+    
+    
+        # Create a scrolled text widget for multi-line text entry
+        self.input_box = tkscrolled.ScrolledText(self.main_frame, wrap=tk.WORD, width=40, height=10)
+        self.input_box.pack(anchor=tk.SW, fill='both', expand=False)
         
           # Find Button
-        self.find_button = Button(self.main_frame, text='Find', command=self.find_text, font=('Helvetica', 9))
+        self.find_button = Button(self.main_frame, text='Tag', command=self.find_text, font=('Helvetica', 9))
         self.find_button.pack(anchor=NE, padx=5, pady=5)
 
         # Clear Button
@@ -344,6 +361,10 @@ class GUI(tk.Frame):
         # Delete Button
         self.delete_button = Button(self.main_frame, text='Delete', command=self.delete_text, font=('Helvetica', 9))
         self.delete_button.pack(anchor=NE, padx=5, pady=5)
+        
+        
+
+
 
         # ... Existing code ...
 
@@ -769,6 +790,27 @@ class GUI(tk.Frame):
         self.notebook.add(self.KWIC_tab, text='KWIC')
         self.notebook.add(self.roman_urdu_tab, text='Urdu Word Categories')
         self.notebook.add(self.pos_tag, text='POS TAG')
+         # Create a new tab for URDUIZED WORDS
+        self.urduized_words_tab = Frame(self.notebook, bg="#90ee91")
+        self.notebook.add(self.urduized_words_tab, text='URDUIZED WORDS')
+
+        # Create a Treeview widget to display the urdu_pos_tags dictionary
+        urduized_words_tree = ttk.Treeview(self.urduized_words_tab, columns=("word", "pos"), show="headings")
+
+        # Define column headings
+        urduized_words_tree.heading("word", text="Urdu Word")
+        urduized_words_tree.heading("pos", text="Part of Speech")
+
+        # Set column widths
+        urduized_words_tree.column("word", width=200)
+        urduized_words_tree.column("pos", width=100)
+
+        # Populate the Treeview with data from urdu_pos_tags dictionary
+        for word, pos in urdu_pos_tags.items():
+            urduized_words_tree.insert("", tk.END, values=(word, pos))
+
+        # Position the Treeview widget
+        urduized_words_tree.pack(fill="both", expand=True, padx=10, pady=10)
 
     def load_files(self):
         load_one_file = fd.askopenfilename(initialdir="/",title="Select an File",filetypes=[("TXT","*.txt"),("PDF","*.pdf"),("ALL Files","*.*")])
@@ -780,29 +822,40 @@ class GUI(tk.Frame):
             self.file = file.name
             self.Lbox.insert(END, self.file)
             
-    
     def find_text(self):
-        # Get the text from the input box
-        text_to_display = self.input_box.get()
+        # Get the text from the ScrolledText widget
+        text_to_display = self.input_box.get("1.0", tk.END)
 
         # Clear any existing content in the text widget
         self.text_widget.delete("1.0", tk.END)
 
-        # Insert the text from the input box into the text widget
+        # Insert the text from the ScrolledText widget into the text widget
         self.text_widget.insert("1.0", text_to_display)
 
-        # Tag the paragraph and count tagged words
-        tagged_words, tagged_word_count = self.tag_paragraph_and_count(text_to_display)
+        # Tokenize the paragraph using word_tokenize for both Urdu and English words
+        words = word_tokenize(text_to_display)
+
+        # Initialize an empty list to store tagged words
+        tagged_words_combined = []
+
+        for word in words:
+            # Check if the word exists in urdu_pos_tags dictionary
+            if word in urdu_pos_tags:
+                tag = urdu_pos_tags[word]
+                tagged_words_combined.append((word, tag))
+            else:
+                # Tag English words using nltk's pos_tag
+                tagged_words = pos_tag([word])
+                tagged_words_combined.extend(tagged_words)
 
         # Display the tagged words in the text widget
-        for word, tag in tagged_words:
-            self.text_widget.insert(tk.END, f"\n{word}: {tag}")
-
-        # Display the total number of tagged words
-        self.text_widget.insert(tk.END, f"\n\nTotal Tagged Words: {tagged_word_count}")
+        for word, tag in tagged_words_combined:
+            self.text_widget.insert(tk.END, f"{word}_{tag} ")
 
         # Highlight Roman Urduized or Urdu words
         self.highlight_words()
+
+
         
     def open_add_urdu_words_form(self):
         # Create a new form window
@@ -891,7 +944,7 @@ class GUI(tk.Frame):
             
 def main():
     openconc = GUI(master)
-    openconc.master.title("Open Concordance")
+    openconc.master.title("UDFIXER")
     openconc.mainloop()
 
 if __name__ == "__main__":
